@@ -1,0 +1,27 @@
+# Compilation outputs
+*.exe
+*.obj
+*.lib
+*.exp
+*.ilk
+*.pdb
+*.suo
+*.user
+
+# Build directories
+x64/
+x86/
+bin/
+obj/
+Debug/
+Release/
+.vs/
+.vscode/
+
+# Temporary files
+*.tmp
+*.log
+*.tlog
+
+# Downloaded/extracted libraries
+pypdf_lib/
