@@ -51,14 +51,14 @@ The initial iteration is inefficient because of **Warp Divergence**. At each ste
 1. **Improvement 1: Interleaved Addressing**
    *Technique:* We adjusted the stride mechanism so the active threads remain contiguous (`sharedData[tid] += sharedData[tid + stride]`).
    *Why it improves performance:* It removes warp divergence in the early loops. The processor can pack all active threads tightly into the first warps instead of spreading out active modulo threads across every warp.
-   *Speedup:* Increased speed by **1.36x**.
+   *Speedup:* Increased speed by **6.81x**.
 
 2. **Improvement 2: Loop Unrolling last warps**
    *Technique:* When the reduction targets the final 32 elements inside shared memory, synchronization arrays (`__syncthreads()`) become useless since all elements map to a single executing warp. We unroll the loop to avoid barrier overheads.
    *Why it improves performance:* Stops synchronization bottlenecks.
-   *Speedup:* Increased speed by **1.61x** (over naive).
+   *Speedup:* Increased speed by **7.90x** (over naive).
 
 3. **Improvement 3: Warp Shuffle Instructions (`__shfl_down_sync`)**
    *Technique:* Bypass shared memory outright in favor of peer-to-thread register shifts.
    *Why it improves performance:* Writing to and executing blocks from shared memory is fast, but Registers are the absolute fastest tier of the hierarchy. Shuffling data directly intra-warp using `__shfl_down_sync` mitigates memory bounds entirely during the final phases of reduction.
-   *Speedup:* Produced the quickest reduction time at **1.949 ms** (**1.87x vs Naive**).
+   *Speedup:* Produced the quickest reduction time at **1.735 ms** (**8.95x vs Naive**).

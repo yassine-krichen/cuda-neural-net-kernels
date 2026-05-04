@@ -47,17 +47,42 @@ Here we abandon the naive approach and use professional tools: NVIDIA's highly-o
 
 ## 🧠 Part 3: Neural Network Sum Reduction
 
-For the neural network hidden layer, we must sum 8,192 elements per neuron. We started with a Naive reduction and applied three distinct optimization strategies.
+For the neural network hidden layer, we must sum 8,192 elements per neuron. We started with a Naive reduction and applied three distinct optimization strategies. Below is the final *verified* output from the benchmark suite:
+
+```text
+============================================================
+  PARTIE 3-2 : Optimisations Sum Reduction
+  Input size  : 8192
+  Hidden size : 8192
+  Block size  : 1024
+============================================================
+
+--- Temps moyen sur 10 iterations ---
+
+  Naive (reference)                   : 15.535 ms [VALID]
+  Amelioration 1 : Entrelacee         : 2.281 ms [VALID]
+  Amelioration 2 : Warp Shuffle       : 1.735 ms [VALID]
+  Amelioration 3 : Unrolling          : 1.966 ms [VALID]
+
+============================================================
+  TABLEAU RECAPITULATIF DES PERFORMANCES
+  Kernel                               Temps(ms)   Speedup
+  Naive (reference)                      15.535      1.00x
+  Amelioration 1 : Entrelacee             2.281      6.81x
+  Amelioration 2 : Warp Shuffle           1.735      8.95x
+  Amelioration 3 : Unrolling              1.966      7.90x
+============================================================
+```
 
 *(Note: Times are averaged over 10 iterations for precision)*
 
 ### Results
 | Optimization Level | Technique Used | Avg Time (ms) | Speedup vs Naive |
 | :--- | :--- | :---: | :---: |
-| **Baseline** | Naive Reduction | 3.644 | 1.00x |
-| **Optimization 1** | Interleaved Addressing | 2.683 | 1.36x |
-| **Optimization 3** | Loop Unrolling | 2.265 | 1.61x |
-| **Optimization 2** | **Warp Shuffle** (`__shfl_down_sync`) | **1.949** | **1.87x** |
+| **Baseline** | Naive Reduction | 15.535 | 1.00x |
+| **Optimization 1** | Interleaved Addressing | 2.281 | 6.81x |
+| **Optimization 3** | Loop Unrolling | 1.966 | 7.90x |
+| **Optimization 2** | **Warp Shuffle** (`__shfl_down_sync`) | **1.735** | **8.95x** |
 
 > [!TIP]
 > **Optimization Breakdown:**
