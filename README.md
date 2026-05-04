@@ -86,16 +86,16 @@ Naive baseline vs Column-major memory access:
 
 ### 3. Neural Network Sum Reduction
 Optimizing an 8192x8192 Sigmoid Hidden Layer. Performance scales based on warp occupancy and register bandwidth:
-| Technique | Avg Time (ms) | Bandwidth | Speedup |
-| :--- | :---: | :---: | :---: |
-| Naive Reduction | 3.644 | 73.67 GB/s | 1.00x |
-| Interleaved Addressing | 2.683 | 100.06 GB/s | 1.36x |
-| Loop Unrolling | 2.265 | 118.53 GB/s | 1.61x |
-| **Warp Shuffle** | **1.949** | **137.74 GB/s** | **1.87x** |
+| Technique | Avg Time (ms) | Speedup |
+| :--- | :---: | :---: |
+| Naive Reduction | 15.535 | 1.00x |
+| Interleaved Addressing | 2.281 | 6.81x |
+| Loop Unrolling | 1.966 | 7.90x |
+| **Warp Shuffle** | **1.735** | **8.95x** |
 
 ## 🚀 Quick Start
 Run the test suite using the provided bat script:
 ```powershell
-.\scripts\run_all.bat
+.\scripts\01_build_and_run_all.bat
 ```
 *(Ensure MSVC and NVCC are configured in your `%PATH%`)*

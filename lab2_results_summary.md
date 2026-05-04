@@ -14,5 +14,5 @@
 
 | Kernel Implementation | Performance | Speed up |
 | :--- | :--- | :--- |
-| Naïve | 3.644 ms (73.67 GB/s) | 1.00x |
-| Technique giving best result (Warp Shuffle) | 1.949 ms (137.74 GB/s) | 1.87x |
+| Naïve | 15.535 ms | 1.00x |
+| Technique giving best result (Warp Shuffle) | 1.735 ms | 8.95x |

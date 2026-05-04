@@ -66,29 +66,34 @@ __global__ void sumReductionNaiveNN(const float* __restrict__ xW,
 
     int tid    = threadIdx.x;
     int neuron = blockIdx.x;  // Un bloc = un neurone
+    int base   = neuron * input_size;
 
-    // --- Chargement : chaque thread charge plusieurs éléments (réduction séquentielle) ---
-    // Permet de gérer input_size > BLOCK_SIZE
-    float sum = 0.0f;
-    int base = neuron * input_size;
-    for (int i = tid; i < input_size; i += blockDim.x) {
-        sum += xW[base + i];
-    }
-    sharedData[tid] = sum;
-    __syncthreads();
+    float neuron_sum = 0.0f;
+    for (int offset = 0; offset < input_size; offset += blockDim.x) {
+        if (offset + tid < input_size) {
+            sharedData[tid] = xW[base + offset + tid];
+        } else {
+            sharedData[tid] = 0.0f;
+        }
+        __syncthreads();
 
-    // --- Réduction naïve dans le bloc ---
-    for (int stride = 1; stride < blockDim.x; stride *= 2) {
-        if (tid % (2 * stride) == 0) {
-            sharedData[tid] += sharedData[tid + stride];
+        // Naïve reduction within block
+        for (int stride = 1; stride < blockDim.x; stride *= 2) {
+            if (tid % (2 * stride) == 0) {
+                sharedData[tid] += sharedData[tid + stride];
+            }
+            __syncthreads(); // Synchronize after each step
+        }
+
+        if (tid == 0) {
+            neuron_sum += sharedData[0];
         }
         __syncthreads();
     }
 
-    // --- Thread 0 : appliquer sigmoid et écrire le résultat ---
+    // Write block result to output
     if (tid == 0) {
-        float z = sharedData[0];
-        h[neuron] = 1.0f / (1.0f + expf(-z));  // Sigmoid
+        h[neuron] = 1.0f / (1.0f + expf(-neuron_sum));
     }
 }
 
@@ -103,22 +108,30 @@ __global__ void sumReductionNaiveFinal(const float* __restrict__ h,
     extern __shared__ float sharedData[];
     int tid = threadIdx.x;
 
-    float sum = 0.0f;
-    for (int i = tid; i < hidden_size; i += blockDim.x) {
-        sum += h[i];
-    }
-    sharedData[tid] = sum;
-    __syncthreads();
+    float neuron_sum = 0.0f;
+    for (int offset = 0; offset < hidden_size; offset += blockDim.x) {
+        if (offset + tid < hidden_size) {
+            sharedData[tid] = h[offset + tid];
+        } else {
+            sharedData[tid] = 0.0f;
+        }
+        __syncthreads();
 
-    for (int stride = 1; stride < blockDim.x; stride *= 2) {
-        if (tid % (2 * stride) == 0) {
-            sharedData[tid] += sharedData[tid + stride];
+        for (int stride = 1; stride < blockDim.x; stride *= 2) {
+            if (tid % (2 * stride) == 0) {
+                sharedData[tid] += sharedData[tid + stride];
+            }
+            __syncthreads();
+        }
+        
+        if (tid == 0) {
+            neuron_sum += sharedData[0];
         }
         __syncthreads();
     }
 
     if (tid == 0) {
-        y[0] = sharedData[0];   // Pas d'activation sur la sortie
+        y[0] = neuron_sum;   // Pas d'activation sur la sortie
     }
 }
 
