@@ -1,101 +1,97 @@
-<div align="center">
+# cuda-neural-net-kernels
 
-# 🚀 Codesign Lab 2: CUDA Programming
-### High-Performance GPU Kernels
+*CUDA kernels for matrix multiplication and neural-network sum reduction, benchmarked on an RTX 3050.*
 
-[![NVIDIA GPU](https://img.shields.io/badge/GPU-RTX%203050-76B900?style=for-the-badge&logo=nvidia)](https://www.nvidia.com)
-[![CUDA](https://img.shields.io/badge/CUDA-13.2-76B900?style=for-the-badge&logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
-[![C++](https://img.shields.io/badge/C++-MSVC%20%2F%20NVCC-00599C?style=for-the-badge&logo=c%2B%2B)](https://isocpp.org/)
+![CUDA](https://img.shields.io/badge/CUDA-13.2-76B900)
+![GPU](https://img.shields.io/badge/GPU-RTX%203050-76B900)
+![License](https://img.shields.io/badge/license-PolyForm%20Strict%201.0.0-lightgrey)
 
-</div>
+Lab 2 of the CODESIGN course (GL3, INSAT). The goal is to see how much of a GPU's throughput comes from how memory is accessed and which hardware path is used, so each kernel is written in a naive form first and then improved one technique at a time. Every variant is timed on the same problem size, which makes the effect of each technique visible.
 
-This repository contains the results and implementation of the **CUDA Programming Lab**, focusing on GPU-accelerated computing for General Purpose Applications (GPGPU), spanning baseline memory coalescence, cuBLAS integration, Tensor Core operations, and custom Neural Network Sum Reductions.
+## What is in it
 
----
+| Part | Kernels | Technique |
+| :--- | :--- | :--- |
+| 1. Matrix multiplication | `matrixMulXrow`, `matrixMulYrow` (float and int) | Memory coalescing: the same arithmetic with two thread-to-element mappings |
+| 2. Libraries and hardware | `cublasSgemm`, `matmulTensorCore` | cuBLAS SGEMM, and Tensor Cores through the WMMA API (16x16 tiles, FP16 inputs, FP32 accumulation) |
+| 3. Sum reduction | naive, interleaved, unrolled, warp shuffle | Reduction for a sigmoid hidden layer (8192 neurons x 8192 inputs): removing warp divergence, unrolling the last warp, and `__shfl_down_sync` |
 
-## 📂 Project Structure
+## Layout
 
 ```text
-├── src/                        # Kernel implementations
-│   ├── 01_matmul_baseline.cu     # Naive row/col Matrix Multiplication (Float/Int)
-│   ├── 02_matmul_advanced.cu     # cuBLAS & Tensor Core Implementations
-│   ├── 03_reduction_naive.cu     # Naive Sum Reduction for Neural Networks
-│   └── 04_reduction_optimized.cu # Optimized Sum Reductions (Warp Shuffle, Unrolling)
-├── scripts/                    # Build and execution scripts
-│   ├── build_and_run_all.bat     # Compile and execute the full pipeline
-│   ├── run_part2.bat             # Fallback/specific configuration scripts
-│   └── run_part2_fixed.bat
-├── third_party/                # Third-party libraries and wheels (not source)
-│   └── pypdf/                   # bundled pypdf wheel/extracted package
-├── results/                    # Benchmark outputs and raw results
-└── docs/                       # Problem statements, summaries, and reports
+src/
+  01_matmul_baseline.cu       coalesced vs non-coalesced matmul, float and int
+  02_matmul_advanced.cu       cuBLAS SGEMM and WMMA Tensor Core matmul
+  03_reduction_naive.cu       naive sum reduction for the hidden layer
+  04_reduction_optimized.cu   interleaved, unrolled and warp-shuffle reductions
+  99_legacy_kernel_original.cu  first version of the matmul kernels, kept for reference
+scripts/                      Windows .bat files that build and run each part
+results/                      raw benchmark output and a formatted summary
+lab2_report.md                the lab report
+docs/                         the assignment and the CUDA introduction guide
 ```
 
----
+## How it works
 
-## ⚙️ How to Build and Run
+- **Coalescing.** In `matrixMulXrow` neighbouring threads of a warp read addresses far apart in memory. `matrixMulYrow` maps threads so a warp reads consecutive addresses, which lets the hardware serve a warp with few memory transactions.
+- **cuBLAS.** `cublasSgemm` is called on the same matrices. cuBLAS is column-major, so the call swaps the operands to get a row-major product.
+- **Tensor Cores.** Inputs are converted from FP32 to FP16 on the device (`convertFp32ToFp16`), then each warp computes 16x16 tiles with `nvcuda::wmma`, accumulating in FP32.
+- **Reductions.** The naive kernel halves the active threads with a strided pattern that leaves warps divergent. The interleaved version keeps active threads contiguous. The unrolled version removes `__syncthreads()` from the last 32 steps. The warp-shuffle version finishes inside a warp through registers with `__shfl_down_sync`, without shared memory. The benchmark checks each result against the naive output and prints `[VALID]`.
 
-To ensure maximum compatibility, this project relies on **NVCC** (The NVIDIA CUDA Compiler) and the standard MSVC compiler on Windows. 
+## Build and run
 
-### Prerequisites
-1. **NVIDIA GPU** with Compute Capability `7.0` or higher (Tensor Core support requires `7.0+`, Ampere `8.6` recommended).
-2. **CUDA Toolkit** installed (Code was verified on CUDA `13.2`).
-3. **Microsoft Visual Studio** (C++ Build Tools) installed and mapped to the system `%PATH%`.
-
-### Compilation & Execution
-Open a **Developer Command Prompt for VS** (or any terminal where `nvcc` is in the PATH), and execute the global build script. This will compile the kernels and run the default benchmarks.
+Requirements: an NVIDIA GPU with compute capability 7.0 or higher (Tensor Cores), the CUDA Toolkit (developed on 13.2) and the MSVC build tools on Windows.
 
 ```bat
-cd path\to\repo
-.\scripts\build_and_run_all.bat
+:: from a Developer Command Prompt for VS
+scripts\01_build_and_run_all.bat
 ```
 
-You can run individual scripts from `scripts\` as needed:
+The scripts contain absolute paths to the Visual Studio and CUDA install directories used on the author's machine; edit them first. A single file can also be built directly:
 
 ```bat
-.\scripts\build_and_run_all.bat    # build and run the full pipeline
-.\scripts\run_part2.bat           # run Part 2 (cuBLAS / TensorCore tests)
-.\scripts\run_part2_fixed.bat     # alternate configuration for Part 2
+nvcc src\02_matmul_advanced.cu -o part2 -lcublas
+part2.exe
 ```
 
-Alternatively compile a single source file manually (example linking cuBLAS):
-```bat
-nvcc src\04_reduction_optimized.cu -o bin_opt -lcublas
-.\bin_opt.exe
-```
+## Measured results
 
-Note: third-party python libs are placed under `third_party/` (e.g. `third_party/pypdf`). These are not required to compile the CUDA code but are included for reference or local utilities.
+RTX 3050 (Ampere), CUDA 13.2, MSVC, N = 8192 (256 MB per matrix). Raw output is in `results/raw_benchmarks.txt`, the formatted version in `results/showcase_results.md`. Each figure is a single run for matmul, and the mean of 10 iterations for the reductions.
 
----
+**Matrix multiplication**
 
-## 📊 Benchmark Showcase
+| Kernel | Time (ms) | GFLOPS |
+| :--- | ---: | ---: |
+| Non-coalesced, float | 18,583.3 | 59.17 |
+| Coalesced, float | 2,537.4 | 433.32 |
+| Non-coalesced, int | 18,477.3 | 59.51 |
+| Coalesced, int | 2,357.6 | 466.37 |
+| cuBLAS SGEMM | 321.7 | 3,417.53 |
+| Tensor Cores (WMMA, FP16 in / FP32 acc) | 77.0 | 14,268.05 |
 
-**Hardware Profile:**
-- **GPU:** NVIDIA GeForce RTX 3050 (Ampere Architecture)
-- **Problem Size $N$:** `8192 x 8192` (256 MB per matrix)
+Coalescing alone gives about 7.3x. The 57.7x (cuBLAS) and 241.1x (Tensor Cores) figures in the report are relative to the non-coalesced kernel, so they overstate the gain over a reasonable hand-written baseline. The Tensor Core path uses FP16 inputs and its error against FP32 was not measured.
 
-### 1. Matrix Multiplication: Memory Coalescence
-Naive baseline vs Column-major memory access:
-- **MatmulXrow** (Non-coalesced): 18,583.3 ms (59.17 GFLOPS)
-- **MatmulYrow** (Coalesced): 2,537.4 ms (433.32 GFLOPS) -> **~7.3x Speedup**
-> *Note: Float32 and Int32 performed identically on Ampere due to concurrent separated datapaths and shared memory-bound constraints.*
+**Sum reduction (8192 x 8192, sigmoid)**
 
-### 2. High-Performance Math Libraries & Tensor Cores
-- **cuBLAS (SGEMM):** 321.7 ms (3,417.53 GFLOPS) **(57.7x vs Naive)**
-- **Tensor Cores (WMMA):** 77.0 ms (14,268.05 GFLOPS) **(241.1x vs Naive)**
+| Variant | Mean time (ms) | Speedup |
+| :--- | ---: | ---: |
+| Naive | 15.535 | 1.00x |
+| Interleaved addressing | 2.281 | 6.81x |
+| Loop unrolling | 1.966 | 7.90x |
+| Warp shuffle | 1.735 | 8.95x |
 
-### 3. Neural Network Sum Reduction
-Optimizing an 8192x8192 Sigmoid Hidden Layer. Performance scales based on warp occupancy and register bandwidth:
-| Technique | Avg Time (ms) | Speedup |
-| :--- | :---: | :---: |
-| Naive Reduction | 15.535 | 1.00x |
-| Interleaved Addressing | 2.281 | 6.81x |
-| Loop Unrolling | 1.966 | 7.90x |
-| **Warp Shuffle** | **1.735** | **8.95x** |
+## Limitations
 
-## 🚀 Quick Start
-Run the test suite using the provided bat script:
-```powershell
-.\scripts\01_build_and_run_all.bat
-```
-*(Ensure MSVC and NVCC are configured in your `%PATH%`)*
+No CPU baseline, no run-to-run variance, no profiler (Nsight) data, and no shared-memory tiled matmul to compare against cuBLAS. These are the obvious next steps.
+
+## License
+
+**Source-available, not open source.** Published under the
+[PolyForm Strict License 1.0.0](LICENSE) so you can read the code, run it, and learn
+from it for personal, research, or evaluation use.
+
+You may **not** use it commercially, redistribute it, rebrand it, or publish modified
+versions without written permission. Copyright (c) 2026 Yassine Krichen. All rights
+not granted by the license are reserved.
+
+For commercial licensing or collaboration: krichenyassine22@gmail.com
